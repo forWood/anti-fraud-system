@@ -1,0 +1,200 @@
+# ============================================================================
+# AI智能体决策引擎 gRPC 服务定义 (Proto3)
+# ============================================================================
+
+syntax = "proto3";
+
+package com.bank.risk.agent;
+
+option java_multiple_files = true;
+option java_package = "com.bank.risk.agent.grpc";
+option java_outer_classname = "AntiFraudAgentProto";
+
+// ========================================================================
+// 反欺诈智能体服务
+// ========================================================================
+
+service AntiFraudAgentService {
+    // 交易风险评估 (核心接口)
+    rpc AssessTransaction (AssessRequest) returns (AssessResponse);
+
+    // 批量风险评估
+    rpc BatchAssess (BatchAssessRequest) returns (BatchAssessResponse);
+
+    // 知识库检索
+    rpc SearchKnowledge (KnowledgeSearchRequest) returns (KnowledgeSearchResponse);
+
+    // 健康检查
+    rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// ========================================================================
+// 请求/响应消息
+// ========================================================================
+
+message AssessRequest {
+    // 交易基本信息
+    string transaction_id = 1;
+    string account_id = 2;
+    string account_id_hash = 3;
+    double amount = 4;
+    string currency = 5;
+    string transaction_type = 6;
+    string channel_code = 7;
+    int64 transaction_time = 8; // Unix timestamp (ms)
+
+    // 对手方信息
+    string counterparty_account = 10;
+    string counterparty_hash = 11;
+    string counterparty_name = 12;
+    string counterparty_country = 13;
+
+    // 设备信息
+    string device_id = 20;
+    string device_type = 21;
+    string device_os = 22;
+    bool is_emulator = 23;
+    bool is_rooted = 24;
+    bool is_first_device = 25;
+
+    // 网络信息
+    string ip_address = 30;
+    string ip_country = 31;
+    string ip_city = 32;
+    string ip_risk_level = 33;
+
+    // GPS
+    double gps_lat = 40;
+    double gps_lng = 41;
+
+    // 实时特征
+    double amount_1h = 50;
+    int32 count_1h = 51;
+    double amount_24h = 52;
+    int32 count_24h = 53;
+    int32 device_count_30d = 54;
+    int32 city_count_30d = 55;
+    int32 counterparty_count_30d = 56;
+    bool is_night_time = 57;
+    bool is_cross_border = 58;
+    double amount_deviation = 59;
+
+    // 商户
+    string merchant_id = 60;
+    string remark = 61;
+
+    // 其他
+    bool enable_knowledge_search = 70;  // 是否启用知识库检索
+    int32 knowledge_top_k = 71;         // 知识库检索Top-K
+    bool enable_detail_explain = 72;    // 是否返回详细解释
+}
+
+message AssessResponse {
+    // 评估结果
+    string transaction_id = 1;
+    double risk_score = 2;          // 0-100
+    string risk_level = 3;          // LOW / MEDIUM / HIGH
+    string decision = 4;            // PASS / REVIEW / BLOCK
+    double confidence = 5;          // 0-1
+
+    // 子评分
+    double rule_score = 10;
+    double ml_score = 11;
+    double kb_score = 12;
+
+    // 命中规则
+    repeated MatchedRule matched_rules = 20;
+
+    // 相似案例
+    repeated SimilarCase similar_cases = 30;
+
+    // 风险因子
+    repeated string risk_factors = 40;
+
+    // 模型主要贡献特征
+    repeated FeatureContribution top_features = 45;
+
+    // 是否触发制裁名单
+    bool sanction_matched = 50;
+    string sanction_detail = 51;
+
+    // 处理耗时 (ms)
+    int64 processing_time_ms = 60;
+
+    // 请求跟踪ID
+    string request_id = 70;
+}
+
+message MatchedRule {
+    string rule_id = 1;
+    string rule_name = 2;
+    string description = 3;
+    int32 risk_weight = 4;
+    double risk_score = 5;
+    string risk_level = 6;
+    string trigger_detail = 7;
+}
+
+message SimilarCase {
+    string case_id = 1;
+    string case_title = 2;
+    string case_type = 3;
+    string fraud_pattern = 4;
+    string modus_operandi = 5;
+    string resolution = 6;
+    double similarity = 7;
+}
+
+message FeatureContribution {
+    string feature_name = 1;
+    double shap_value = 2;
+    string description = 3;
+}
+
+message BatchAssessRequest {
+    repeated AssessRequest transactions = 1;
+    int32 timeout_ms = 2;
+}
+
+message BatchAssessResponse {
+    repeated AssessResponse results = 1;
+    int32 total = 2;
+    int32 success = 3;
+    int32 failed = 4;
+}
+
+message KnowledgeSearchRequest {
+    string query = 1;
+    string category = 2;    // rules / cases / all
+    int32 top_k = 3;
+    bool use_vector_search = 4;
+}
+
+message KnowledgeSearchResponse {
+    repeated KnowledgeItem items = 1;
+    int64 search_time_ms = 2;
+    int32 total = 3;
+}
+
+message KnowledgeItem {
+    string item_id = 1;
+    string title = 2;
+    string content = 3;
+    string category = 4;
+    double relevance_score = 5;
+}
+
+message HealthCheckRequest {
+    string service_name = 1;
+}
+
+message HealthCheckResponse {
+    enum ServingStatus {
+        UNKNOWN = 0;
+        SERVING = 1;
+        NOT_SERVING = 2;
+    }
+    ServingStatus status = 1;
+    string message = 2;
+    int64 timestamp = 3;
+}

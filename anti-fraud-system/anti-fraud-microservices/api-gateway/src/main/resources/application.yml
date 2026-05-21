@@ -1,0 +1,54 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    nacos:
+      discovery:
+        enabled: true
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            maxAge: 3600
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 3000
+
+# Sentinel
+feign:
+  sentinel:
+    enabled: true
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    com.bank.risk.gateway: INFO

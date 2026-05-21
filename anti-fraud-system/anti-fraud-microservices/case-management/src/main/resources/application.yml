@@ -1,0 +1,46 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: case-management
+  profiles:
+    active: dev
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/risk_db?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:risk_user}
+    password: ${MYSQL_PASSWORD:risk_pass_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: case-management-group
+      auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.bank.risk: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+logging:
+  level:
+    com.bank.risk: INFO

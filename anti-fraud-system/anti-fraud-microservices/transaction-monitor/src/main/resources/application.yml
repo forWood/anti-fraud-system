@@ -1,0 +1,49 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: transaction-monitor
+  profiles:
+    active: dev
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: transaction-monitor-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# gRPC client to anti-fraud-agent
+grpc:
+  client:
+    anti-fraud-agent:
+      address: ${GRPC_CLIENT_ANTI_FRAUD_AGENT_ADDRESS:static://localhost:9090}
+      negotiationType: plaintext
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.bank.risk: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+logging:
+  level:
+    com.bank.risk: INFO

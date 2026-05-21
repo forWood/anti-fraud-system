@@ -1,0 +1,351 @@
+version: '3.8'
+
+# ============================================================================
+# 反欺诈系统 - 本地开发环境
+# 包含: Kafka, MySQL, Redis, Flink, ClickHouse, Prometheus, Grafana
+# ============================================================================
+
+services:
+  # ========================================================================
+  # 消息队列 - Kafka
+  # ========================================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: risk-zk
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: risk-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========================================================================
+  # 数据库 - MySQL
+  # ========================================================================
+  mysql:
+    image: mysql:8.0.33
+    container_name: risk-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: risk_db
+      MYSQL_USER: risk_user
+      MYSQL_PASSWORD: risk_pass_2026
+    volumes:
+      - ../anti-fraud-sql/init-schema.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - mysql-data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========================================================================
+  # 缓存 - Redis
+  # ========================================================================
+  redis:
+    image: redis:7.0-alpine
+    container_name: risk-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ========================================================================
+  # OLAP - ClickHouse
+  # ========================================================================
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    container_name: risk-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # ========================================================================
+  # 向量数据库 - Milvus (standalone)
+  # ========================================================================
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: risk-etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    volumes:
+      - etcd-data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: risk-minio
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - minio-data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+
+  milvus:
+    image: milvusdb/milvus:v2.3.3
+    container_name: risk-milvus
+    depends_on:
+      - etcd
+      - minio
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - milvus-data:/var/lib/milvus
+
+  # ========================================================================
+  # Flink JobManager
+  # ========================================================================
+  flink-jobmanager:
+    image: flink:1.16.3-scala_2.12
+    container_name: risk-flink-jm
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 2
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        execution.checkpointing.interval: 60s
+
+  flink-taskmanager:
+    image: flink:1.16.3-scala_2.12
+    container_name: risk-flink-tm
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+
+  # ========================================================================
+  # 监控 - Prometheus + Grafana
+  # ========================================================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: risk-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: risk-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+      - grafana-data:/var/lib/grafana
+
+  # ========================================================================
+  # AI智能体服务
+  # ========================================================================
+  anti-fraud-agent:
+    build:
+      context: ../anti-fraud-agent
+      dockerfile: ../anti-fraud-deployment/docker/agent/Dockerfile
+    container_name: risk-agent
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    restart: unless-stopped
+
+  # ========================================================================
+  # 知识库服务 (Python)
+  # ========================================================================
+  knowledge-base:
+    build:
+      context: ../anti-fraud-knowledge-base
+      dockerfile: ../anti-fraud-deployment/docker/knowledge/Dockerfile
+    container_name: risk-knowledge
+    ports:
+      - "8088:8088"
+      - "9091:9091"
+    depends_on:
+      - mysql
+      - milvus
+    environment:
+      DB_HOST: mysql
+      DB_USER: risk_user
+      DB_PASSWORD: risk_pass_2026
+      DB_DATABASE: risk_db
+      MILVUS_HOST: milvus
+      MILVUS_PORT: "19530"
+    restart: unless-stopped
+
+  # ========================================================================
+  # 交易监控微服务
+  # ========================================================================
+  transaction-monitor:
+    build:
+      context: ../anti-fraud-microservices/transaction-monitor
+    container_name: risk-tm
+    ports:
+      - "8081:8081"
+    depends_on:
+      - anti-fraud-agent
+    environment:
+      GRPC_CLIENT_ANTI_FRAUD_AGENT_ADDRESS: static://anti-fraud-agent:9090
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    restart: unless-stopped
+
+  # ========================================================================
+  # 预警管理微服务
+  # ========================================================================
+  alert-management:
+    build:
+      context: ../anti-fraud-microservices/alert-management
+      dockerfile: ../anti-fraud-deployment/docker/alert-management/Dockerfile
+    container_name: risk-alert
+    ports:
+      - "8082:8082"
+    depends_on:
+      - mysql
+      - kafka
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      MYSQL_HOST: mysql
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MAIL_HOST: ${MAIL_HOST:smtp.example.com}
+      MAIL_USERNAME: ${MAIL_USERNAME:}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:}
+    restart: unless-stopped
+
+  # ========================================================================
+  # 案件管理微服务
+  # ========================================================================
+  case-management:
+    build:
+      context: ../anti-fraud-microservices/case-management
+      dockerfile: ../anti-fraud-deployment/docker/case-management/Dockerfile
+    container_name: risk-case
+    ports:
+      - "8083:8083"
+    depends_on:
+      - mysql
+      - kafka
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      MYSQL_HOST: mysql
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    restart: unless-stopped
+
+  # ========================================================================
+  # 报告生成微服务
+  # ========================================================================
+  report-generation:
+    build:
+      context: ../anti-fraud-microservices/report-generation
+      dockerfile: ../anti-fraud-deployment/docker/report-generation/Dockerfile
+    container_name: risk-report
+    ports:
+      - "8084:8084"
+    depends_on:
+      - mysql
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      MYSQL_HOST: mysql
+    restart: unless-stopped
+
+  # ========================================================================
+  # API网关
+  # ========================================================================
+  api-gateway:
+    build:
+      context: ../anti-fraud-microservices/api-gateway
+      dockerfile: ../anti-fraud-deployment/docker/api-gateway/Dockerfile
+    container_name: risk-gateway
+    ports:
+      - "8888:8888"
+    depends_on:
+      - anti-fraud-agent
+      - transaction-monitor
+      - alert-management
+      - case-management
+      - report-generation
+      - redis
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      REDIS_HOST: redis
+      NACOS_SERVER: nacos:8848
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  redis-data:
+  clickhouse-data:
+  etcd-data:
+  minio-data:
+  milvus-data:
+  prometheus-data:
+  grafana-data:

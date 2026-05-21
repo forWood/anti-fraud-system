@@ -1,0 +1,127 @@
+# ============================================================================
+# 反欺诈AI智能体服务配置
+# ============================================================================
+
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: anti-fraud-agent
+  profiles:
+    active: dev
+
+  # Redis配置 - 在线特征存储
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 50
+        max-idle: 10
+        min-idle: 2
+        max-wait: 3000ms
+
+  # MySQL数据源
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/risk_db?useUnicode=true&characterEncoding=utf8mb4&useSSL=true&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:risk_user}
+    password: ${MYSQL_PASSWORD:risk_pass_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      idle-timeout: 300000
+
+# gRPC Server
+grpc:
+  server:
+    port: 9090
+    max-inbound-message-size: 10MB
+    max-outbound-message-size: 10MB
+
+# Drools规则引擎
+drools:
+  rules:
+    path: ${DROOLS_RULES_PATH:src/main/resources/rules}
+  enable-dynamic-refresh: true
+
+# ML模型服务
+ml:
+  model:
+    service:
+      url: ${ML_SERVICE_URL:http://tf-serving:8501}
+    name: fraud_detection
+    version: "2.0.0"
+    timeout: 200
+
+# 知识库服务
+knowledge:
+  service:
+    url: ${KB_SERVICE_URL:http://knowledge-base:8088}
+    timeout: 2000
+
+# 决策引擎
+decision:
+  rule-weight: 0.4
+  ml-weight: 0.6
+  high-risk-threshold: 80
+  medium-risk-threshold: 50
+
+# 监控
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: anti-fraud-agent
+
+# 日志
+logging:
+  level:
+    root: INFO
+    com.bank.risk: DEBUG
+    org.drools: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/anti-fraud-agent.log
+    max-size: 100MB
+    max-history: 30
+
+---
+# 开发环境
+spring:
+  config:
+    activate:
+      on-profile: dev
+logging:
+  level:
+    com.bank.risk: DEBUG
+
+---
+# 生产环境
+spring:
+  config:
+    activate:
+      on-profile: prod
+logging:
+  level:
+    com.bank.risk: INFO
+  file:
+    name: /var/log/anti-fraud-agent/app.log
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

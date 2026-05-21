@@ -1,0 +1,56 @@
+# ============================================================================
+# 反欺诈系统 Prometheus 告警规则
+# ============================================================================
+groups:
+  - name: anti_fraud_alerts
+    rules:
+      # 决策延迟告警
+      - alert: HighDecisionLatency
+        expr: histogram_quantile(0.99, rate(risk_assessment_duration_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: anti-fraud-agent
+        annotations:
+          summary: "P99决策延迟超过500ms"
+          description: "当前P99延迟: {{ $value }}s，目标≤500ms"
+
+      # 高风险交易占比异常
+      - alert: HighRiskTransactionRatio
+        expr: rate(risk_decision_total{decision="BLOCK"}[10m]) / rate(risk_decision_total[10m]) > 0.3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "高风险交易占比异常(>30%)"
+          description: "当前高风险比例: {{ $value | humanizePercentage }}"
+
+      # 规则引擎执行异常
+      - alert: RuleEngineExecutionFailure
+        expr: rate(risk_rule_execution_total[5m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "规则引擎无执行记录"
+          description: "规则引擎可能已停止工作"
+
+      # 知识库检索空结果率
+      - alert: KnowledgeSearchEmptyRateHigh
+        expr: rate(knowledge_search_empty_total[5m]) / rate(knowledge_search_total[5m]) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "知识库检索空结果率偏高(>50%)"
+          description: "可能知识库索引问题或数据不足"
+
+      # 服务健康检查失败
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "服务 {{ $labels.job }} 已宕机"
+          description: "{{ $labels.job }} 已不可用超过1分钟"

@@ -1,0 +1,46 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# WorkBuddy & CodeBuddy
+.workbuddy/
+.codebuddy/
+
+# Maven
+target/
+*.class
+*.jar
+!**/lib/*.jar
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# Temp
+*.tmp
+*.bak
+*.swp

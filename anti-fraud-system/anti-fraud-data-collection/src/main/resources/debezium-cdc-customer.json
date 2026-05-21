@@ -1,0 +1,46 @@
+# ============================================================================
+# Debezium MySQL CDC 配置
+# 用于捕获 customer_profile 表的变更事件
+# ============================================================================
+
+name: bank-risk-cdc-connector
+connector.class: io.debezium.connector.mysql.MySqlConnector
+tasks.max: 2
+database.hostname: mysql-master
+database.port: 3306
+database.user: debezium
+database.password: ${DEBEZIUM_DB_PASSWORD}
+database.server.id: 184054
+database.server.name: bank_risk
+database.include.list: risk_db
+table.include.list: risk_db.customer_profile
+database.history.kafka.bootstrap.servers: kafka:9092
+database.history.kafka.topic: schema-changes.customer
+
+# 数据类型映射
+decimal.handling.mode: precise
+time.precision.mode: connect
+
+# 快照配置
+snapshot.mode: initial
+snapshot.locking.mode: minimal
+
+# 事件转换
+transforms: route,unwrap
+transforms.route.type: org.apache.kafka.connect.transforms.RegexRouter
+transforms.route.regex: ([^.]+)\\.([^.]+)\\.([^.]+)
+transforms.route.replacement: $3-cdc
+transforms.unwrap.type: io.debezium.transforms.ExtractNewRecordState
+transforms.unwrap.drop.tombstones: false
+
+# 详细输出
+key.converter: org.apache.kafka.connect.json.JsonConverter
+value.converter: org.apache.kafka.connect.json.JsonConverter
+key.converter.schemas.enable: false
+value.converter.schemas.enable: false
+
+# 性能调优
+max.batch.size: 2048
+max.queue.size: 8192
+poll.interval.ms: 100
+connect.timeout.ms: 30000

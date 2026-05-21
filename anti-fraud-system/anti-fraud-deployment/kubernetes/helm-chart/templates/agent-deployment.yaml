@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-anti-fraud-agent
+  labels:
+    app: anti-fraud-agent
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.antiFraudAgent.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: anti-fraud-agent
+  template:
+    metadata:
+      labels:
+        app: anti-fraud-agent
+        release: {{ .Release.Name }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: {{ .Release.Name }}-agent
+      terminationGracePeriodSeconds: {{ .Values.antiFraudAgent.terminationGracePeriodSeconds }}
+      containers:
+      - name: agent
+        image: "{{ .Values.global.imageRegistry }}/{{ .Values.antiFraudAgent.image.repository }}:{{ .Values.antiFraudAgent.image.tag }}"
+        imagePullPolicy: {{ .Values.antiFraudAgent.image.pullPolicy }}
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: grpc
+          protocol: TCP
+        env:
+        - name: JAVA_OPTS
+          value: "{{ .Values.antiFraudAgent.javaOpts }}"
+        - name: SPRING_PROFILES_ACTIVE
+          value: {{ .Values.global.environment }}
+        - name: MYSQL_HOST
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-db-secret
+              key: host
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-redis-secret
+              key: host
+        resources:
+          {{- toYaml .Values.antiFraudAgent.resources | nindent 10 }}
+        livenessProbe:
+          {{- toYaml .Values.antiFraudAgent.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.antiFraudAgent.readinessProbe | nindent 10 }}
+        lifecycle:
+          {{- toYaml .Values.antiFraudAgent.lifecycle | nindent 10 }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: anti-fraud-agent
+  labels:
+    app: anti-fraud-agent
+spec:
+  type: {{ .Values.antiFraudAgent.service.type }}
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  - port: 9090
+    targetPort: 9090
+    name: grpc
+  selector:
+    app: anti-fraud-agent
+---
+{{- if .Values.antiFraudAgent.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: anti-fraud-agent-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}-anti-fraud-agent
+  minReplicas: {{ .Values.antiFraudAgent.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.antiFraudAgent.autoscaling.maxReplicas }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.antiFraudAgent.autoscaling.targetCPUUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.antiFraudAgent.autoscaling.targetMemoryUtilizationPercentage }}
+{{- end }}

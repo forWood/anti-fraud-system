@@ -1,0 +1,6 @@
+apiVersion: v2
+name: anti-fraud-system
+description: 反欺诈与反恐融资风险识别智能体系统 Helm Chart
+type: application
+version: 2.0.0
+appVersion: "2.0.0"

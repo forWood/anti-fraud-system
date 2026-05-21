@@ -1,0 +1,54 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: report-generation
+  profiles:
+    active: dev
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/risk_db?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:risk_user}
+    password: ${MYSQL_PASSWORD:risk_pass_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # Quartz scheduling
+  quartz:
+    job-store-type: memory
+    properties:
+      org:
+        quartz:
+          scheduler:
+            instanceName: ReportScheduler
+          threadPool:
+            threadCount: 5
+
+  # FreeMarker for HTML reports
+  freemarker:
+    template-loader-path: classpath:/templates
+    charset: UTF-8
+    cache: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.bank.risk: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+logging:
+  level:
+    com.bank.risk: INFO

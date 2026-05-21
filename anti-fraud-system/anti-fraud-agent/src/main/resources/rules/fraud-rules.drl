@@ -1,0 +1,330 @@
+// ========================================================================
+// 反欺诈规则定义 (Drools DRL)
+// ========================================================================
+// 规则分类: 金额类/时间行为类/地域IP类/设备类/行为序列类/反恐融资专项
+// 遵循SRS 3.11节业务规则定义
+// ========================================================================
+
+package com.bank.risk.rules;
+
+import com.bank.risk.common.model.RuleResult;
+import java.math.BigDecimal;
+import java.lang.Number;
+
+global java.util.List matchedRules;
+global org.slf4j.Logger logger;
+
+// ========================================================================
+// 一、交易金额类规则 (R001-R008)
+// ========================================================================
+
+rule "R001-单笔大额交易"
+    salience 100
+    enabled true
+    when
+        $amount: Double(doubleValue >= 500000.00) from entry-point "amount"
+        $features: Map(this["amount"] != null)
+    then
+        RuleResult result = new RuleResult("R001", "单笔大额交易",
+            "单笔交易金额≥50万元", 30, "MEDIUM");
+        result.setRiskScore(30.0);
+        result.setTriggerDetail("交易金额: " + $amount);
+        matchedRules.add(result);
+        logger.info("Rule R001 triggered: amount={}", $amount);
+end
+
+rule "R002-频繁大额交易"
+    salience 95
+    enabled true
+    when
+        $count: Integer(intValue >= 5) from entry-point "count_24h"
+        $amount24h: Double(doubleValue >= 1000000.00) from entry-point "amount_24h"
+    then
+        RuleResult result = new RuleResult("R002", "频繁大额交易",
+            "单日累计≥100万元", 40, "MEDIUM");
+        result.setRiskScore(40.0);
+        matchedRules.add(result);
+end
+
+rule "R003-分散转入集中转出"
+    salience 90
+    enabled true
+    when
+        $count: Integer(intValue >= 10) from entry-point "count_24h"
+        $amount24h: Double(doubleValue >= 300000.00) from entry-point "amount_24h"
+        $features: Map(this["transaction_type"] == "TRANSFER")
+    then
+        RuleResult result = new RuleResult("R003", "分散转入集中转出",
+            "单日转入≥10笔且转出累计≥30万元", 60, "HIGH");
+        result.setRiskScore(60.0);
+        matchedRules.add(result);
+end
+
+rule "R004-整数金额交易"
+    salience 70
+    enabled true
+    when
+        $amount: Double($amount % 10000 == 0 && $amount >= 50000) from entry-point "amount"
+    then
+        RuleResult result = new RuleResult("R004", "整数金额交易",
+            "交易金额为整数万且≥5万元", 20, "LOW");
+        result.setRiskScore(20.0);
+        matchedRules.add(result);
+end
+
+rule "R005-快进快出"
+    salience 85
+    enabled true
+    when
+        $amount: Double(doubleValue >= 10000.00) from entry-point "amount"
+        $features: Map(this["amount_1h"] != null,
+                      ((Number)this["amount_1h"]).doubleValue() >= this["amount"])
+    then
+        RuleResult result = new RuleResult("R005", "快进快出",
+            "1小时内资金转入后立即转出", 45, "MEDIUM");
+        result.setRiskScore(45.0);
+        matchedRules.add(result);
+end
+
+rule "R007-小额试探交易"
+    salience 80
+    enabled true
+    when
+        $count1h: Integer(intValue >= 3) from entry-point "count_1h"
+        $amount: Double(doubleValue >= 50000.00) from entry-point "amount"
+    then
+        // 检查是否有小额交易后的大额
+        RuleResult result = new RuleResult("R007", "小额试探交易",
+            "1h≥3笔交易后立即大额转出", 50, "HIGH");
+        result.setRiskScore(50.0);
+        matchedRules.add(result);
+end
+
+// ========================================================================
+// 二、时间行为类规则 (R101-R106)
+// ========================================================================
+
+rule "R101-凌晨高频交易"
+    salience 85
+    enabled true
+    when
+        $count1h: Integer(intValue >= 3) from entry-point "count_1h"
+        $features: Map(this["is_night_time"] == true)
+        $amount: Double(doubleValue >= 50000.00) from entry-point "amount"
+    then
+        RuleResult result = new RuleResult("R101", "凌晨高频交易",
+            "00:00-05:00交易次数≥3笔且金额≥5万元", 40, "MEDIUM");
+        result.setRiskScore(40.0);
+        matchedRules.add(result);
+end
+
+rule "R102-非营业时间大额交易"
+    salience 80
+    enabled true
+    when
+        $amount: Double(doubleValue >= 200000.00) from entry-point "amount"
+        $features: Map(this["is_night_time"] == true || this["is_weekend"] == true)
+    then
+        RuleResult result = new RuleResult("R102", "非营业时间大额交易",
+            "非营业时间单笔≥20万元", 30, "MEDIUM");
+        result.setRiskScore(30.0);
+        matchedRules.add(result);
+end
+
+rule "R106-交易脉冲"
+    salience 75
+    enabled true
+    when
+        $count1h: Integer(intValue >= 5) from entry-point "count_1h"
+        $amount1h: Double(doubleValue >= 200000.00) from entry-point "amount_1h"
+    then
+        RuleResult result = new RuleResult("R106", "交易脉冲",
+            "1h≥5笔交易且总金额≥20万元", 55, "HIGH");
+        result.setRiskScore(55.0);
+        matchedRules.add(result);
+end
+
+// ========================================================================
+// 三、地域与IP类规则 (R201-R206)
+// ========================================================================
+
+rule "R202-跨境交易高风险"
+    salience 90
+    enabled true
+    when
+        $features: Map(this["is_cross_border"] == true)
+        $country: String(length > 0) from entry-point "counterparty_country"
+        exists String(this == "KP" || this == "IR" || this == "SY") from entry-point "high_risk_countries"
+    then
+        RuleResult result = new RuleResult("R202", "跨境交易高风险",
+            "资金流向/来源为FATF高风险国家", 60, "HIGH");
+        result.setRiskScore(60.0);
+        matchedRules.add(result);
+end
+
+rule "R203-高匿名IP交易"
+    salience 95
+    enabled true
+    when
+        $ipRisk: String(this == "VPN" || this == "PROXY" || this == "TOR" || this == "HIGH_RISK") from entry-point "ip_risk_level"
+    then
+        RuleResult result = new RuleResult("R203", "高匿名IP交易",
+            "IP为VPN/代理/Tor", 50, "HIGH");
+        result.setRiskScore(50.0);
+        matchedRules.add(result);
+end
+
+rule "R204-IP归属地异常"
+    salience 70
+    enabled true
+    when
+        $features: Map(this["city_count_30d"] instanceof Number,
+                      ((Number)this["city_count_30d"]).intValue() == 1)
+        $ipRisk: String(this == "MEDIUM_RISK") from entry-point "ip_risk_level"
+    then
+        RuleResult result = new RuleResult("R204", "IP归属地异常",
+            "IP归属地与常驻城市不一致", 35, "MEDIUM");
+        result.setRiskScore(35.0);
+        matchedRules.add(result);
+end
+
+rule "R206-高风险地区交易"
+    salience 95
+    enabled true
+    when
+        $ipRisk: String(this == "HIGH_RISK") from entry-point "ip_risk_level"
+    then
+        RuleResult result = new RuleResult("R206", "高风险地区交易",
+            "IP位于高风险制裁地区", 70, "HIGH");
+        result.setRiskScore(70.0);
+        matchedRules.add(result);
+end
+
+// ========================================================================
+// 四、设备类规则 (R301-R306)
+// ========================================================================
+
+rule "R301-新设备首次交易"
+    salience 80
+    enabled true
+    when
+        $features: Map(this["is_first_device"] == true)
+        $amount: Double(doubleValue >= 10000.00) from entry-point "amount"
+    then
+        RuleResult result = new RuleResult("R301", "新设备首次交易",
+            "设备首次绑定账户且交易≥1万元", 30, "MEDIUM");
+        result.setRiskScore(30.0);
+        matchedRules.add(result);
+end
+
+rule "R302-模拟器检测"
+    salience 95
+    enabled true
+    when
+        $features: Map(this["is_emulator"] == true)
+    then
+        RuleResult result = new RuleResult("R302", "模拟器检测",
+            "设备为模拟器/虚拟机", 60, "HIGH");
+        result.setRiskScore(60.0);
+        matchedRules.add(result);
+end
+
+rule "R305-ROOT越狱设备"
+    salience 85
+    enabled true
+    when
+        $features: Map(this["is_rooted"] == true)
+    then
+        RuleResult result = new RuleResult("R305", "ROOT/越狱设备",
+            "设备安全状态异常", 45, "MEDIUM");
+        result.setRiskScore(45.0);
+        matchedRules.add(result);
+end
+
+rule "R306-频繁换设备"
+    salience 75
+    enabled true
+    when
+        $deviceCount: Integer(intValue >= 5) from entry-point "device_count_30d"
+    then
+        RuleResult result = new RuleResult("R306", "频繁换设备",
+            "30天绑定设备数≥5台", 40, "MEDIUM");
+        result.setRiskScore(40.0);
+        matchedRules.add(result);
+end
+
+// ========================================================================
+// 五、行为序列类规则 (R401-R406)
+// ========================================================================
+
+rule "R401-新注册即大额交易"
+    salience 90
+    enabled true
+    when
+        $amount: Double(doubleValue >= 50000.00) from entry-point "amount"
+        $features: Map(this["account_age_days"] instanceof Number,
+                      ((Number)this["account_age_days"]).intValue() <= 1)
+    then
+        RuleResult result = new RuleResult("R401", "新注册即大额交易",
+            "账户注册≤24h即发起大额交易", 55, "HIGH");
+        result.setRiskScore(55.0);
+        matchedRules.add(result);
+end
+
+rule "R403-信息变更后交易"
+    salience 85
+    enabled true
+    when
+        $features: Map(this["info_changed_recently"] == true)
+        $amount: Double(doubleValue >= 10000.00) from entry-point "amount"
+    then
+        RuleResult result = new RuleResult("R403", "信息变更后交易",
+            "修改绑定信息后立即发起交易", 50, "HIGH");
+        result.setRiskScore(50.0);
+        matchedRules.add(result);
+end
+
+// ========================================================================
+// 六、反恐融资专项规则 (T001-T005)
+// ========================================================================
+
+rule "T001-制裁名单命中"
+    salience 100
+    enabled true
+    when
+        $features: Map(this["sanction_matched"] == true)
+    then
+        RuleResult result = new RuleResult("T001", "制裁名单命中",
+            "交易对手命中制裁名单", 100, "HIGH");
+        result.setRiskScore(100.0);
+        matchedRules.add(result);
+        // 标记需要立即阻断
+        $features.put("requires_immediate_block", true);
+end
+
+rule "T002-高风险行业交易"
+    salience 80
+    enabled true
+    when
+        $features: Map(this["counterparty_industry"] == "VIRTUAL_CURRENCY"
+                      || this["counterparty_industry"] == "NPO"
+                      || this["counterparty_industry"] == "GAMBLING")
+    then
+        RuleResult result = new RuleResult("T002", "高风险行业交易",
+            "交易对手为高风险行业", 55, "HIGH");
+        result.setRiskScore(55.0);
+        matchedRules.add(result);
+end
+
+rule "T005-涉及战乱国家"
+    salience 90
+    enabled true
+    when
+        $features: Map(this["is_cross_border"] == true)
+        $country: String(this == "SY" || this == "YE" || this == "LY" || this == "SO") from entry-point "counterparty_country"
+    then
+        RuleResult result = new RuleResult("T005", "涉及战乱国家",
+            "交易对手位于受制裁/战乱国家", 75, "HIGH");
+        result.setRiskScore(75.0);
+        matchedRules.add(result);
+end

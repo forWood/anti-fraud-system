@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.2">
+  <hashTree>
+    <!-- ============================================================================
+         反欺诈系统 JMeter 性能压测计划
+         
+         测试目标:
+         - 5000 TPS 持续吞吐量
+         - P99 延迟 ≤ 1秒
+         - P99 决策延迟 ≤ 500ms
+         
+         运行方式:
+         jmeter -n -t anti-fraud-jmeter.jmx -l results.jtl -e -o report/
+    ============================================================================ -->
+    
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="反欺诈系统性能测试" enabled="true">
+      <stringProp name="TestPlan.comments">性能测试目标: 5000 TPS, P99≤1s</stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="BASE_URL" elementType="Argument">
+            <stringProp name="Argument.name">BASE_URL</stringProp>
+            <stringProp name="Argument.value">localhost</stringProp>
+          </elementProp>
+          <elementProp name="PORT" elementType="Argument">
+            <stringProp name="Argument.name">PORT</stringProp>
+            <stringProp name="Argument.value">8081</stringProp>
+          </elementProp>
+          <elementProp name="TARGET_TPS" elementType="Argument">
+            <stringProp name="Argument.name">TARGET_TPS</stringProp>
+            <stringProp name="Argument.value">5000</stringProp>
+          </elementProp>
+          <elementProp name="DURATION_SECONDS" elementType="Argument">
+            <stringProp name="Argument.name">DURATION_SECONDS</stringProp>
+            <stringProp name="Argument.value">1800</stringProp>
+          </elementProp>
+        </collectionProp>
+      </elementProp>
+    </TestPlan>
+
+    <!-- ===== 线程组: 持续压测 ===== -->
+    <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="持续压测-5000TPS" enabled="true">
+      <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+      <elementProp name="ThreadGroup.main_controller" elementType="LoopController">
+        <boolProp name="LoopController.continue_forever">true</boolProp>
+        <stringProp name="LoopController.loops">-1</stringProp>
+      </elementProp>
+      <stringProp name="ThreadGroup.num_threads">500</stringProp>
+      <stringProp name="ThreadGroup.ramp_time">60</stringProp>
+      <boolProp name="ThreadGroup.scheduler">true</boolProp>
+      <stringProp name="ThreadGroup.duration">${DURATION_SECONDS}</stringProp>
+      <stringProp name="ThreadGroup.delay">0</stringProp>
+    </ThreadGroup>
+    <hashTree>
+      <!-- ===== HTTP请求默认配置 ===== -->
+      <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="HTTP默认配置">
+        <stringProp name="HTTPSampler.domain">${BASE_URL}</stringProp>
+        <stringProp name="HTTPSampler.port">${PORT}</stringProp>
+        <stringProp name="HTTPSampler.protocol">http</stringProp>
+        <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+      </ConfigTestElement>
+      <hashTree/>
+
+      <!-- ===== HTTP Header Manager ===== -->
+      <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP Header">
+        <collectionProp name="HeaderManager.headers">
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">Content-Type</stringProp>
+            <stringProp name="Header.value">application/json</stringProp>
+          </elementProp>
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">X-API-Key</stringProp>
+            <stringProp name="Header.value">test-api-key-2026</stringProp>
+          </elementProp>
+        </collectionProp>
+      </HeaderManager>
+      <hashTree/>
+
+      <!-- ===== CSV数据文件: 模拟不同交易场景 ===== -->
+      <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="交易数据CSV">
+        <stringProp name="delimiter">,</stringProp>
+        <stringProp name="fileEncoding">UTF-8</stringProp>
+        <stringProp name="filename">transactions.csv</stringProp>
+        <boolProp name="ignoreFirstLine">true</boolProp>
+        <boolProp name="quotedData">false</boolProp>
+        <boolProp name="recycle">true</boolProp>
+        <stringProp name="shareMode">shareMode.all</stringProp>
+        <boolProp name="stopThread">false</boolProp>
+        <stringProp name="variableNames">account_id,account_hash,amount,channel,device_id,ip,is_emulator,is_cross_border</stringProp>
+      </CSVDataSet>
+      <hashTree/>
+
+      <!-- ===== 交易评估请求 ===== -->
+      <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /assess" enabled="true">
+        <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+          <collectionProp name="Arguments.arguments">
+            <elementProp name="" elementType="HTTPArgument">
+              <boolProp name="HTTPArgument.always_encode">false</boolProp>
+              <stringProp name="Argument.value">{
+  "transaction_id": "${__UUID}",
+  "account_id": "${account_id}",
+  "account_id_hash": "${account_hash}",
+  "amount": ${amount},
+  "currency": "CNY",
+  "transaction_type": "TRANSFER",
+  "channel_code": "${channel}",
+  "transaction_time": ${__time(,)},
+  "device_id": "${device_id}",
+  "device_type": "MOBILE",
+  "is_emulator": ${is_emulator},
+  "is_rooted": false,
+  "is_first_device": false,
+  "ip_address": "${ip}",
+  "ip_risk_level": "NORMAL",
+  "is_cross_border": ${is_cross_border},
+  "counterparty_country": "CN",
+  "amount_1h": 5000.00,
+  "count_1h": 3,
+  "amount_24h": 50000.00,
+  "count_24h": 15,
+  "device_count_30d": 3,
+  "city_count_30d": 2,
+  "is_night_time": false,
+  "amount_deviation": 0.5,
+  "enable_knowledge_search": true,
+  "knowledge_top_k": 5
+}</stringProp>
+              <stringProp name="Argument.metadata">=</stringProp>
+            </elementProp>
+          </collectionProp>
+        </elementProp>
+        <stringProp name="HTTPSampler.domain"></stringProp>
+        <stringProp name="HTTPSampler.port"></stringProp>
+        <stringProp name="HTTPSampler.protocol"></stringProp>
+        <stringProp name="HTTPSampler.path">/api/v1/monitor/assess</stringProp>
+        <stringProp name="HTTPSampler.method">POST</stringProp>
+        <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+        <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+        <stringProp name="TestPlan.comments">交易风险评估接口</stringProp>
+      </HTTPSamplerProxy>
+      <hashTree>
+        <!-- ===== 响应断言: 验证返回格式 ===== -->
+        <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="响应验证">
+          <collectionProp name="Asserion.test_strings">
+            <stringProp name="0">risk_score</stringProp>
+            <stringProp name="1">risk_level</stringProp>
+            <stringProp name="2">decision</stringProp>
+          </collectionProp>
+          <stringProp name="Assertion.test_field">assertion_type</stringProp>
+          <boolProp name="Assertion.assume_success">false</boolProp>
+          <intProp name="Assertion.test_type">2</intProp>
+          <stringProp name="Assertion.custom_message">响应缺少必填字段</stringProp>
+        </ResponseAssertion>
+        <hashTree/>
+
+        <!-- ===== 响应时长断言: P99≤1s ===== -->
+        <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="响应时间≤1000ms">
+          <stringProp name="DurationAssertion.duration">1000</stringProp>
+        </DurationAssertion>
+        <hashTree/>
+      </hashTree>
+
+      <!-- ===== 结果收集器 ===== -->
+      <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="聚合报告" enabled="true">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <fileName>true</fileName>
+            <hostname>true</hostname>
+            <threadCounts>true</threadCounts>
+            <sampleCount>true</sampleCount>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename">results.jtl</stringProp>
+      </ResultCollector>
+      <hashTree/>
+
+      <!-- ===== 后端监听器: 发送指标到InfluxDB (可选) ===== -->
+      <BackendListener guiclass="BackendListenerGui" testclass="BackendListener" testname="InfluxDB监控">
+        <elementProp name="arguments" elementType="Arguments">
+          <collectionProp name="Arguments.arguments">
+            <elementProp name="influxdbMetricsSender" elementType="Argument">
+              <stringProp name="Argument.name">influxdbMetricsSender</stringProp>
+              <stringProp name="Argument.value">org.apache.jmeter.visualizers.backend.influxdb.HttpMetricsSender</stringProp>
+            </elementProp>
+            <elementProp name="influxdbUrl" elementType="Argument">
+              <stringProp name="Argument.name">influxdbUrl</stringProp>
+              <stringProp name="Argument.value">http://localhost:8086/write?db=jmeter</stringProp>
+            </elementProp>
+            <elementProp name="application" elementType="Argument">
+              <stringProp name="Argument.name">application</stringProp>
+              <stringProp name="Argument.value">anti-fraud-system</stringProp>
+            </elementProp>
+            <elementProp name="measurement" elementType="Argument">
+              <stringProp name="Argument.name">measurement</stringProp>
+              <stringProp name="Argument.value">jmeter</stringProp>
+            </elementProp>
+            <elementProp name="summaryOnly" elementType="Argument">
+              <stringProp name="Argument.name">summaryOnly</stringProp>
+              <stringProp name="Argument.value">false</stringProp>
+            </elementProp>
+            <elementProp name="samplersRegex" elementType="Argument">
+              <stringProp name="Argument.name">samplersRegex</stringProp>
+              <stringProp name="Argument.value">.*assess.*</stringProp>
+            </elementProp>
+            <elementProp name="percentiles" elementType="Argument">
+              <stringProp name="Argument.name">percentiles</stringProp>
+              <stringProp name="Argument.value">50;90;95;99</stringProp>
+            </elementProp>
+            <elementProp name="testTitle" elementType="Argument">
+              <stringProp name="Argument.name">testTitle</stringProp>
+              <stringProp name="Argument.value">反欺诈系统5000TPS压测</stringProp>
+            </elementProp>
+          </collectionProp>
+        </elementProp>
+        <stringProp name="classname">org.apache.jmeter.visualizers.backend.influxdb.InfluxdbBackendListenerClient</stringProp>
+      </BackendListener>
+      <hashTree/>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>

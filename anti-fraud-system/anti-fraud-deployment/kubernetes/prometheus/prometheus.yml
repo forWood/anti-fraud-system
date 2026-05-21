@@ -1,0 +1,65 @@
+# ============================================================================
+# 反欺诈系统 Prometheus 监控配置
+# ============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+# 告警规则文件
+rule_files:
+  - "/etc/prometheus/rules/anti-fraud-alerts.yml"
+
+# 抓取目标
+scrape_configs:
+  # ===== AI智能体服务 =====
+  - job_name: 'anti-fraud-agent'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['anti-fraud-agent:8080']
+        labels:
+          service: 'anti-fraud-agent'
+          env: 'production'
+
+  # ===== 交易监控服务 =====
+  - job_name: 'transaction-monitor'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['transaction-monitor:8081']
+        labels:
+          service: 'transaction-monitor'
+
+  # ===== 预警管理服务 =====
+  - job_name: 'alert-management'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['alert-management:8082']
+        labels:
+          service: 'alert-management'
+
+  # ===== Kafka监控 =====
+  - job_name: 'kafka-metrics'
+    static_configs:
+      - targets: ['kafka:9092']
+
+  # ===== Redis监控 =====
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # ===== MySQL监控 =====
+  - job_name: 'mysql-exporter'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+
+  # ===== Flink监控 =====
+  - job_name: 'flink-metrics'
+    metrics_path: '/'
+    static_configs:
+      - targets: ['flink-jobmanager:9249', 'flink-taskmanager:9249']
+
+  # ===== Prometheus自监控 =====
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

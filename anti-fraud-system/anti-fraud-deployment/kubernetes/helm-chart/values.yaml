@@ -1,0 +1,159 @@
+# ============================================================================
+# 反欺诈系统 Helm Values
+# ============================================================================
+
+# 全局配置
+global:
+  imageRegistry: harbor.bank.com/risk
+  imagePullSecrets: [harbor-secret]
+  storageClass: ceph-rbd
+  environment: production
+
+# AI智能体服务
+antiFraudAgent:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: anti-fraud-agent
+    tag: "2.0.0"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    httpPort: 8080
+    grpcPort: 9090
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 4Gi
+    requests:
+      cpu: "1"
+      memory: 2Gi
+
+  # 自动扩缩容 HPA
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # 健康检查
+  livenessProbe:
+    httpGet:
+      path: /actuator/health
+      port: 8080
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+  # 优雅停机
+  terminationGracePeriodSeconds: 30
+  lifecycle:
+    preStop:
+      exec:
+        command: ["/bin/sh", "-c", "sleep 15"]
+
+  # JVM配置
+  javaOpts: "-Xms2g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+
+# 交易监控服务
+transactionMonitor:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: transaction-monitor
+    tag: "2.0.0"
+
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2Gi
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+# 预警管理服务
+alertManagement:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: alert-management
+    tag: "2.0.0"
+
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2Gi
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+
+# 知识库服务
+knowledgeBase:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: knowledge-base
+    tag: "2.0.0"
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 4Gi
+    requests:
+      cpu: "1"
+      memory: 2Gi
+
+# MySQL
+mysql:
+  enabled: false  # 生产建议使用外部数据库
+  replicaCount: 1
+  image:
+    repository: mysql
+    tag: "8.0.33"
+  persistence:
+    size: 100Gi
+  auth:
+    rootPassword: "change-me-in-production"
+    database: risk_db
+    username: risk_user
+    password: "change-me-in-production"
+
+# Redis
+redis:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: redis
+    tag: "7.0-alpine"
+  persistence:
+    size: 20Gi
+
+# Kafka
+kafka:
+  enabled: false
+  replicaCount: 3
+
+# Prometheus
+prometheus:
+  enabled: true
+
+# Grafana
+grafana:
+  enabled: true
+  adminPassword: admin123
