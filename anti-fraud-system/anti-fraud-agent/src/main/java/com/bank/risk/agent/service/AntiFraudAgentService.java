@@ -1,41 +1,39 @@
 package com.bank.risk.agent.service;
 
 import com.bank.risk.agent.decision.DecisionFusionEngine;
-import com.bank.risk.agent.grpc.*;
+import com.bank.risk.agent.grpc.SimilarCase;
 import com.bank.risk.agent.ml.MLModelClient;
+import com.bank.risk.agent.ml.MLPrediction;
 import com.bank.risk.agent.rule.DroolsRuleEngine;
+import com.bank.risk.agent.rule.RuleEngineResult;
 import com.bank.risk.agent.rule.RuleMetricsCollector;
 import com.bank.risk.common.model.*;
-import com.bank.risk.common.util.DataSecurityUtil;
-import io.grpc.stub.StreamObserver;
-import net.devh.boot.grpc.server.service.GrpcService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * AI智能体gRPC服务实现
+ * AI智能体REST API控制器
  *
  * 核心流程:
  * 1. 接收交易请求 → 提取特征
  * 2. 规则引擎评估 (Drools)
  * 3. ML模型推理 (TensorFlow Serving)
- * 4. 知识库RAG检索 (gRPC调用Python服务)
+ * 4. 知识库RAG检索 (HTTP调用Python服务)
  * 5. 决策融合 (40%规则 + 60%模型)
  * 6. 返回评分、等级、决策、解释
  *
  * @author 银行科技部
  */
-@GrpcService
-public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAgentServiceImplBase {
+@RestController
+@RequestMapping("/api/v1/agent")
+public class AntiFraudAgentService {
 
     private static final Logger log = LoggerFactory.getLogger(AntiFraudAgentService.class);
 
@@ -63,9 +61,8 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
     // 交易风险评估 (核心接口)
     // ========================================================================
 
-    @Override
-    public void assessTransaction(AssessRequest request,
-                                   StreamObserver<AssessResponse> responseObserver) {
+    @PostMapping("/assess")
+    public AssessResponse assessTransaction(@RequestBody AssessRequest request) {
 
         long startTime = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString().substring(0, 12);
@@ -95,7 +92,7 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
             double mlScore = 0.0;
             List<RiskAssessment.FeatureContribution> topFeatures = Collections.emptyList();
             try {
-                MLModelClient.MLPrediction mlPrediction = mlModelClient.predict(features);
+                MLPrediction mlPrediction = mlModelClient.predict(features);
                 mlScore = mlPrediction.getFraudProbability() * 100;
                 topFeatures = mlPrediction.getTopFeatures();
             } catch (Exception e) {
@@ -107,7 +104,7 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
             // ===== Step 5: 知识库RAG检索 (可选) =====
             List<SimilarCase> similarCases = Collections.emptyList();
             double kbScore = 0.0;
-            if (request.getEnableKnowledgeSearch()) {
+            if (request.isEnableKnowledgeSearch()) {
                 try {
                     KnowledgeBaseClient.KBSearchResult kbResult =
                         knowledgeBaseClient.searchSimilar(features, request.getKnowledgeTopK());
@@ -148,24 +145,20 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
             // ===== Step 7: 构建响应 =====
             long processingTimeMs = System.currentTimeMillis() - startTime;
 
-            AssessResponse response = AssessResponse.newBuilder()
-                .setTransactionId(request.getTransactionId())
-                .setRiskScore(round(finalScore, 2))
-                .setRiskLevel(riskLevel)
-                .setDecision(decision)
-                .setConfidence(round(confidence, 2))
-                .setRuleScore(round(ruleScore, 2))
-                .setMlScore(round(mlScore, 2))
-                .setKbScore(round(kbScore, 2))
-                .addAllMatchedRules(convertRuleResults(ruleResult.getMatchedRules()))
-                .addAllSimilarCases(similarCases)
-                .addAllRiskFactors(riskFactors)
-                .addAllTopFeatures(convertFeatureContributions(topFeatures))
-                .setSanctionMatched(sanctionMatched)
-                .setSanctionDetail(sanctionDetail)
-                .setProcessingTimeMs(processingTimeMs)
-                .setRequestId(requestId)
-                .build();
+            AssessResponse response = new AssessResponse();
+            response.setTransactionId(request.getTransactionId());
+            response.setRiskScore(round(finalScore, 2));
+            response.setRiskLevel(riskLevel);
+            response.setDecision(decision);
+            response.setConfidence(round(confidence, 2));
+            response.setRuleScore(round(ruleScore, 2));
+            response.setMlScore(round(mlScore, 2));
+            response.setKbScore(round(kbScore, 2));
+            response.setRiskFactors(riskFactors);
+            response.setSanctionMatched(sanctionMatched);
+            response.setSanctionDetail(sanctionDetail);
+            response.setProcessingTimeMs(processingTimeMs);
+            response.setRequestId(requestId);
 
             // 记录指标
             metricsCollector.recordDecision(finalScore, riskLevel, decision, processingTimeMs);
@@ -174,14 +167,17 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
                 requestId, round(finalScore, 2), riskLevel, decision, processingTimeMs,
                 ruleResult.getRuleCount(), round(mlScore, 2));
 
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
+            return response;
 
         } catch (Exception e) {
             log.error("[{}] Assessment failed: {}", requestId, e.getMessage(), e);
-            responseObserver.onError(io.grpc.Status.INTERNAL
-                .withDescription("Assessment failed: " + e.getMessage())
-                .asRuntimeException());
+            AssessResponse errorResponse = new AssessResponse();
+            errorResponse.setTransactionId(request.getTransactionId());
+            errorResponse.setRiskScore(0);
+            errorResponse.setRiskLevel("ERROR");
+            errorResponse.setDecision("ERROR");
+            errorResponse.setRequestId(requestId);
+            return errorResponse;
         }
     }
 
@@ -189,21 +185,17 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
     // 批量评估
     // ========================================================================
 
-    @Override
-    public void batchAssess(BatchAssessRequest request,
-                             StreamObserver<BatchAssessResponse> responseObserver) {
+    @PostMapping("/batch-assess")
+    public Map<String, Object> batchAssess(@RequestBody List<AssessRequest> requests) {
 
-        int total = request.getTransactionsCount();
+        int total = requests.size();
         int success = 0;
         int failed = 0;
         List<AssessResponse> results = new ArrayList<>();
 
-        for (AssessRequest tx : request.getTransactionsList()) {
+        for (AssessRequest tx : requests) {
             try {
-                // 简化实现：逐条评估
-                AssessResponse.Builder partialResponse = AssessResponse.newBuilder();
-                assessSingleInBatch(tx, partialResponse);
-                results.add(partialResponse.build());
+                results.add(assessSingleInBatch(tx));
                 success++;
             } catch (Exception e) {
                 failed++;
@@ -211,17 +203,15 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
             }
         }
 
-        responseObserver.onNext(BatchAssessResponse.newBuilder()
-            .addAllResults(results)
-            .setTotal(total)
-            .setSuccess(success)
-            .setFailed(failed)
-            .build());
-        responseObserver.onCompleted();
+        Map<String, Object> batchResult = new LinkedHashMap<>();
+        batchResult.put("results", results);
+        batchResult.put("total", total);
+        batchResult.put("success", success);
+        batchResult.put("failed", failed);
+        return batchResult;
     }
 
-    private void assessSingleInBatch(AssessRequest request, AssessResponse.Builder builder) {
-        // 简化版评估（与主流程类似，去掉gRPC responseObserver交互）
+    private AssessResponse assessSingleInBatch(AssessRequest request) {
         Map<String, Object> features = extractFeatures(request);
         RuleEngineResult ruleResult = ruleEngine.evaluate(features);
         double mlScore = 0.0;
@@ -233,25 +223,25 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
         double finalScore = RULE_WEIGHT * ruleResult.getRuleScore() + ML_WEIGHT * mlScore;
         finalScore = Math.min(100, Math.max(0, finalScore));
 
-        builder.setTransactionId(request.getTransactionId())
-            .setRiskScore(round(finalScore, 2))
-            .setRiskLevel(finalScore >= 80 ? "HIGH" : (finalScore >= 50 ? "MEDIUM" : "LOW"))
-            .setDecision(finalScore >= 80 ? "BLOCK" : (finalScore >= 50 ? "REVIEW" : "PASS"));
+        AssessResponse resp = new AssessResponse();
+        resp.setTransactionId(request.getTransactionId());
+        resp.setRiskScore(round(finalScore, 2));
+        resp.setRiskLevel(finalScore >= 80 ? "HIGH" : (finalScore >= 50 ? "MEDIUM" : "LOW"));
+        resp.setDecision(finalScore >= 80 ? "BLOCK" : (finalScore >= 50 ? "REVIEW" : "PASS"));
+        return resp;
     }
 
     // ========================================================================
     // 健康检查
     // ========================================================================
 
-    @Override
-    public void healthCheck(HealthCheckRequest request,
-                             StreamObserver<HealthCheckResponse> responseObserver) {
-        responseObserver.onNext(HealthCheckResponse.newBuilder()
-            .setStatus(HealthCheckResponse.ServingStatus.SERVING)
-            .setMessage("AI Agent is healthy")
-            .setTimestamp(System.currentTimeMillis())
-            .build());
-        responseObserver.onCompleted();
+    @GetMapping("/health")
+    public Map<String, Object> healthCheck() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("status", "SERVING");
+        result.put("message", "AI Agent is healthy");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
     }
 
     // ========================================================================
@@ -270,21 +260,21 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
 
         features.put("device_id", request.getDeviceId());
         features.put("device_type", request.getDeviceType());
-        features.put("is_emulator", request.getIsEmulator());
-        features.put("is_rooted", request.getIsRooted());
-        features.put("is_first_device", request.getIsFirstDevice());
+        features.put("is_emulator", request.isEmulator());
+        features.put("is_rooted", request.isRooted());
+        features.put("is_first_device", request.isFirstDevice());
 
         features.put("ip_address", request.getIpAddress());
         features.put("ip_risk_level", request.getIpRiskLevel());
 
-        features.put("amount_1h", request.getAmount_1H());
-        features.put("count_1h", request.getCount_1H());
-        features.put("amount_24h", request.getAmount_24H());
-        features.put("count_24h", request.getCount_24H());
-        features.put("device_count_30d", request.getDeviceCount_30D());
-        features.put("city_count_30d", request.getCityCount_30D());
-        features.put("is_night_time", request.getIsNightTime());
-        features.put("is_cross_border", request.getIsCrossBorder());
+        features.put("amount_1h", request.getAmount1h());
+        features.put("count_1h", request.getCount1h());
+        features.put("amount_24h", request.getAmount24h());
+        features.put("count_24h", request.getCount24h());
+        features.put("device_count_30d", request.getDeviceCount30d());
+        features.put("city_count_30d", request.getCityCount30d());
+        features.put("is_night_time", request.isNightTime());
+        features.put("is_cross_border", request.isCrossBorder());
         features.put("amount_deviation", request.getAmountDeviation());
         features.put("counterparty_country", request.getCounterpartyCountry());
         features.put("counterparty_hash", request.getCounterpartyHash());
@@ -295,16 +285,12 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
     private boolean checkSanctionList(AssessRequest request, Map<String, Object> features) {
         // 简化实现：在实际生产环境中，这里会查询黑名单Redis/MySQL
         // 检查交易对手是否在制裁名单中
-        String counterpartyHash = request.getCounterpartyHash();
-        // 模拟：检查是否有黑名单标记
         return false;
     }
 
     private double calculateConfidence(double ruleScore, double mlScore, int ruleCount) {
-        // 规则命中数越多 + 模型得分越高 = 置信度越高
         double ruleConfidence = Math.min(1.0, ruleCount / 10.0);
         double mlConfidence = mlScore / 100.0;
-        // 简单融合
         return Math.min(1.0, (ruleConfidence * 0.3 + mlConfidence * 0.7));
     }
 
@@ -312,12 +298,10 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
                                            Map<String, Object> features) {
         List<String> factors = new ArrayList<>();
         
-        // 从命中的规则提取风险因子
         for (RuleResult rule : ruleResult.getMatchedRules()) {
             factors.add(String.format("[%s] %s", rule.getRuleId(), rule.getRuleName()));
         }
         
-        // 从特征提取
         if (features.containsKey("is_first_device") &&
             Boolean.TRUE.equals(features.get("is_first_device"))) {
             factors.add("新设备首次交易");
@@ -331,39 +315,11 @@ public class AntiFraudAgentService extends AntiFraudAgentServiceGrpc.AntiFraudAg
             factors.add("跨境交易");
         }
         
-        // ML高得分
         if (mlScore >= 80) {
             factors.add("ML模型判定高风险 (得分≥80)");
         }
         
         return factors;
-    }
-
-    private List<MatchedRule> convertRuleResults(List<RuleResult> ruleResults) {
-        if (ruleResults == null) return Collections.emptyList();
-        return ruleResults.stream()
-            .map(r -> MatchedRule.newBuilder()
-                .setRuleId(r.getRuleId())
-                .setRuleName(r.getRuleName())
-                .setDescription(r.getDescription() != null ? r.getDescription() : "")
-                .setRiskWeight(r.getRiskWeight() != null ? r.getRiskWeight() : 0)
-                .setRiskScore(r.getRiskScore() != null ? r.getRiskScore() : 0.0)
-                .setRiskLevel(r.getRiskLevel() != null ? r.getRiskLevel() : "LOW")
-                .setTriggerDetail(r.getTriggerDetail() != null ? r.getTriggerDetail() : "")
-                .build())
-            .collect(Collectors.toList());
-    }
-
-    private List<FeatureContribution> convertFeatureContributions(
-            List<RiskAssessment.FeatureContribution> contributions) {
-        if (contributions == null) return Collections.emptyList();
-        return contributions.stream()
-            .map(fc -> FeatureContribution.newBuilder()
-                .setFeatureName(fc.getFeatureName())
-                .setShapValue(fc.getShapValue() != null ? fc.getShapValue() : 0.0)
-                .setDescription(fc.getFeatureDescription() != null ? fc.getFeatureDescription() : "")
-                .build())
-            .collect(Collectors.toList());
     }
 
     private double round(double value, int places) {

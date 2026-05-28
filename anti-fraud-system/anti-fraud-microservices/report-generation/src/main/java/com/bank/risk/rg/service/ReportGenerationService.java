@@ -158,7 +158,7 @@ public class ReportGenerationService {
             if (r != null) {
                 r.setStatus("COMPLETED");
                 r.setGeneratedAt(LocalDateTime.now());
-                r.setFileSize(generateExcelReport(r));
+                r.setFileSize((long) generateExcelReport(r).length);
                 r.setDownloadUrl("/api/reports/files/" + reportId + ".xlsx");
                 log.info("Report generated: id={}, size={}KB", reportId, r.getFileSize() / 1024);
             }
@@ -181,7 +181,7 @@ public class ReportGenerationService {
             headerFont.setBold(true);
             headerStyle.setFont(headerFont);
             headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
-            headerStyle.setFillPattern(FillPatternType.SOLFILL);
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
             String[] headers = getHeadersForType(r.getReportType());
             Row headerRow = sheet.createRow(0);

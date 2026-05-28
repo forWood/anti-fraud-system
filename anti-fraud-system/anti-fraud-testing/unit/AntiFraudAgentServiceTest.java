@@ -2,6 +2,7 @@ package com.bank.risk.agent;
 
 import com.bank.risk.agent.decision.DecisionFusionEngine;
 import com.bank.risk.agent.ml.MLModelClient;
+import com.bank.risk.agent.ml.MLPrediction;
 import com.bank.risk.agent.rule.DroolsRuleEngine;
 import com.bank.risk.agent.rule.RuleEngineResult;
 import com.bank.risk.agent.service.AntiFraudAgentService;
@@ -219,7 +220,7 @@ class AntiFraudAgentServiceTest {
 
     @Test
     void testMLPredictionFallback() {
-        MLModelClient.MLPrediction fallback = MLModelClient.MLPrediction.fallback(150);
+        MLPrediction fallback = MLPrediction.fallback(150);
         assertEquals(0.5, fallback.getFraudProbability(), 0.01);
         assertEquals("fallback", fallback.getModelVersion());
         assertTrue(fallback.getTopFeatures().isEmpty());
@@ -227,7 +228,7 @@ class AntiFraudAgentServiceTest {
 
     @Test
     void testMLPredictionNormalFlow() {
-        MLModelClient.MLPrediction prediction = MLModelClient.MLPrediction.builder()
+        MLPrediction prediction = MLPrediction.builder()
             .fraudProbability(0.85)
             .topFeatures(Collections.emptyList())
             .inferenceTimeMs(50)

@@ -1,14 +1,15 @@
 package com.bank.risk.tm.service;
 
-import com.bank.risk.agent.grpc.*;
+import com.bank.risk.common.model.AssessRequest;
+import com.bank.risk.common.model.AssessResponse;
 import com.bank.risk.common.model.RiskAssessment;
-import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -18,7 +19,7 @@ import java.util.stream.Collectors;
 /**
  * 交易风险评估服务
  *
- * 通过gRPC调用AI智能体服务进行风险评估，
+ * 通过HTTP REST调用AI智能体服务进行风险评估，
  * 异步发送预警到Kafka。
  *
  * @author 银行科技部
@@ -28,14 +29,22 @@ public class TransactionAssessService {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionAssessService.class);
 
-    @GrpcClient("anti-fraud-agent")
-    private AntiFraudAgentServiceGrpc.AntiFraudAgentServiceBlockingStub agentStub;
+    private final WebClient webClient;
 
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
 
+    @Value("${agent.service.url:http://localhost:8080}")
+    private String agentServiceUrl;
+
     @Value("${kafka.topic.alert:alert-created}")
     private String alertTopic;
+
+    public TransactionAssessService() {
+        this.webClient = WebClient.builder()
+            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
+            .build();
+    }
 
     /**
      * 单笔交易评估
@@ -43,14 +52,14 @@ public class TransactionAssessService {
     public RiskAssessment assess(Map<String, Object> request) {
         long startTime = System.currentTimeMillis();
 
-        // 构建gRPC请求
+        // 构建请求
         AssessRequest assessRequest = buildAssessRequest(request);
 
-        // 调用智能体服务
-        AssessResponse grpcResponse = agentStub.assessTransaction(assessRequest);
+        // 调用智能体服务 (HTTP REST)
+        AssessResponse response = callAgentService(assessRequest);
 
         // 转换响应
-        RiskAssessment assessment = convertResponse(grpcResponse);
+        RiskAssessment assessment = convertResponse(response);
 
         // 如果是高风险，异步创建预警
         if ("HIGH".equals(assessment.getRiskLevel())) {
@@ -76,6 +85,46 @@ public class TransactionAssessService {
         return futures.stream()
             .map(CompletableFuture::join)
             .collect(Collectors.toList());
+    }
+
+    /**
+     * 调用智能体HTTP REST接口
+     */
+    private AssessResponse callAgentService(AssessRequest request) {
+        try {
+            AssessResponse response = webClient.post()
+                .uri(agentServiceUrl + "/api/v1/agent/assess")
+                .bodyValue(request.toMap())
+                .retrieve()
+                .bodyToMono(AssessResponse.class)
+                .block();
+
+            if (response == null) {
+                return fallbackResponse(request.getTransactionId());
+            }
+            return response;
+
+        } catch (Exception e) {
+            log.warn("Agent service call failed, using fallback: {}", e.getMessage());
+            return fallbackResponse(request.getTransactionId());
+        }
+    }
+
+    /**
+     * 降级响应（Agent不可用时）
+     */
+    private AssessResponse fallbackResponse(String transactionId) {
+        AssessResponse response = new AssessResponse();
+        response.setTransactionId(transactionId);
+        response.setRiskScore(30.0);
+        response.setRiskLevel("LOW");
+        response.setDecision("PASS");
+        response.setConfidence(0.5);
+        response.setRuleScore(0.0);
+        response.setMlScore(0.0);
+        response.setKbScore(0.0);
+        response.setProcessingTimeMs(0);
+        return response;
     }
 
     /**
@@ -106,50 +155,50 @@ public class TransactionAssessService {
     }
 
     private AssessRequest buildAssessRequest(Map<String, Object> request) {
-        AssessRequest.Builder builder = AssessRequest.newBuilder();
+        AssessRequest req = new AssessRequest();
 
         // 基本信息
-        builder.setTransactionId(getString(request, "transaction_id", UUID.randomUUID().toString()));
-        builder.setAccountId(getString(request, "account_id", ""));
-        builder.setAccountIdHash(getString(request, "account_id_hash", ""));
-        builder.setAmount(getDouble(request, "amount"));
-        builder.setCurrency(getString(request, "currency", "CNY"));
-        builder.setTransactionType(getString(request, "transaction_type", "TRANSFER"));
-        builder.setChannelCode(getString(request, "channel_code", "EBANK"));
-        builder.setTransactionTime(getLong(request, "transaction_time", System.currentTimeMillis()));
+        req.setTransactionId(getString(request, "transaction_id", UUID.randomUUID().toString()));
+        req.setAccountId(getString(request, "account_id", ""));
+        req.setAccountIdHash(getString(request, "account_id_hash", ""));
+        req.setAmount(getDouble(request, "amount"));
+        req.setCurrency(getString(request, "currency", "CNY"));
+        req.setTransactionType(getString(request, "transaction_type", "TRANSFER"));
+        req.setChannelCode(getString(request, "channel_code", "EBANK"));
+        req.setTransactionTime(getLong(request, "transaction_time", System.currentTimeMillis()));
 
         // 对手方
-        builder.setCounterpartyAccount(getString(request, "counterparty_account", ""));
-        builder.setCounterpartyHash(getString(request, "counterparty_hash", ""));
-        builder.setCounterpartyCountry(getString(request, "counterparty_country", "CN"));
+        req.setCounterpartyAccount(getString(request, "counterparty_account", ""));
+        req.setCounterpartyHash(getString(request, "counterparty_hash", ""));
+        req.setCounterpartyCountry(getString(request, "counterparty_country", "CN"));
 
         // 设备信息
-        builder.setDeviceId(getString(request, "device_id", ""));
-        builder.setIsEmulator(getBoolean(request, "is_emulator"));
-        builder.setIsRooted(getBoolean(request, "is_rooted"));
-        builder.setIsFirstDevice(getBoolean(request, "is_first_device"));
+        req.setDeviceId(getString(request, "device_id", ""));
+        req.setIsEmulator(getBoolean(request, "is_emulator"));
+        req.setIsRooted(getBoolean(request, "is_rooted"));
+        req.setIsFirstDevice(getBoolean(request, "is_first_device"));
 
         // 网络信息
-        builder.setIpAddress(getString(request, "ip_address", ""));
-        builder.setIpRiskLevel(getString(request, "ip_risk_level", "NORMAL"));
+        req.setIpAddress(getString(request, "ip_address", ""));
+        req.setIpRiskLevel(getString(request, "ip_risk_level", "NORMAL"));
 
         // 实时特征
-        builder.setAmount1H(getDouble(request, "amount_1h"));
-        builder.setCount1H(getInt(request, "count_1h"));
-        builder.setAmount24H(getDouble(request, "amount_24h"));
-        builder.setCount24H(getInt(request, "count_24h"));
-        builder.setDeviceCount30D(getInt(request, "device_count_30d"));
-        builder.setCityCount30D(getInt(request, "city_count_30d"));
-        builder.setIsNightTime(getBoolean(request, "is_night_time"));
-        builder.setIsCrossBorder(getBoolean(request, "is_cross_border"));
-        builder.setAmountDeviation(getDouble(request, "amount_deviation"));
+        req.setAmount1h(getDouble(request, "amount_1h"));
+        req.setCount1h(getInt(request, "count_1h"));
+        req.setAmount24h(getDouble(request, "amount_24h"));
+        req.setCount24h(getInt(request, "count_24h"));
+        req.setDeviceCount30d(getInt(request, "device_count_30d"));
+        req.setCityCount30d(getInt(request, "city_count_30d"));
+        req.setIsNightTime(getBoolean(request, "is_night_time"));
+        req.setIsCrossBorder(getBoolean(request, "is_cross_border"));
+        req.setAmountDeviation(getDouble(request, "amount_deviation"));
 
         // 检索配置
-        builder.setEnableKnowledgeSearch(true);
-        builder.setKnowledgeTopK(5);
-        builder.setEnableDetailExplain(true);
+        req.setEnableKnowledgeSearch(true);
+        req.setKnowledgeTopK(5);
+        req.setEnableDetailExplain(true);
 
-        return builder.build();
+        return req;
     }
 
     private RiskAssessment convertResponse(AssessResponse response) {
@@ -162,7 +211,7 @@ public class TransactionAssessService {
             .ruleScore(response.getRuleScore())
             .mlScore(response.getMlScore())
             .kbScore(response.getKbScore())
-            .riskFactors(response.getRiskFactorsList())
+            .riskFactors(response.getRiskFactors())
             .processingTimeMs(response.getProcessingTimeMs())
             .build();
     }

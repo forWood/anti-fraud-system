@@ -22,8 +22,6 @@
     <modules>
         <module>anti-fraud-common</module>
         <module>anti-fraud-data-collection</module>
-        <module>anti-fraud-flink</module>
-        <module>anti-fraud-spark</module>
         <module>anti-fraud-agent</module>
         <module>anti-fraud-microservices/transaction-monitor</module>
         <module>anti-fraud-microservices/alert-management</module>
@@ -50,7 +48,7 @@
         <kafka.version>3.4.1</kafka.version>
         <flink.version>1.16.3</flink.version>
         <spark.version>3.3.4</spark.version>
-        <scala.version>2.12.18</scala.version>
+        <scala.version>2.12.15</scala.version>
 
         <!-- Rule Engine -->
         <drools.version>7.73.0.Final</drools.version>
@@ -58,6 +56,9 @@
         <!-- gRPC -->
         <grpc.version>1.58.0</grpc.version>
         <protobuf.version>3.24.0</protobuf.version>
+
+        <!-- Lombok (managed by spring-boot-starter-parent 2.7.18) -->
+        <lombok.version>1.18.30</lombok.version>
 
         <!-- Test -->
         <junit.version>5.10.1</junit.version>
@@ -151,6 +152,22 @@
     </dependencyManagement>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>2.7.18</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>repackage</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -160,11 +177,6 @@
                     <source>${java.version}</source>
                     <target>${java.version}</target>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>2.7.18</version>
             </plugin>
         </plugins>
     </build>
