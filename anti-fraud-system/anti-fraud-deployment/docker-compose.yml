@@ -255,7 +255,7 @@ services:
     depends_on:
       - anti-fraud-agent
     environment:
-      GRPC_CLIENT_ANTI_FRAUD_AGENT_ADDRESS: static://anti-fraud-agent:9090
+      AGENT_SERVICE_URL: http://anti-fraud-agent:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     restart: unless-stopped
 
