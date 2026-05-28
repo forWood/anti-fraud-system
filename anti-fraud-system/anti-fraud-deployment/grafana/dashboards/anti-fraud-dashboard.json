@@ -1,0 +1,176 @@
+{
+  "annotations": {
+    "list": [{"builtIn": 1, "datasource": "-- Grafana --", "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts", "type": "dashboard"}]
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": 1,
+  "links": [],
+  "panels": [
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 0},
+      "hiddenSeries": false,
+      "id": 1,
+      "legend": {"avg": false, "current": false, "max": false, "min": false, "show": true, "total": false, "values": false},
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {"alertThreshold": true},
+      "percentage": false,
+      "pluginVersion": "10.1.0",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(risk_assessment_duration_bucket[5m]))",
+          "interval": "",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(risk_assessment_duration_bucket[5m]))",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(risk_assessment_duration_bucket[5m]))",
+          "legendFormat": "P99",
+          "refId": "C"
+        }
+      ],
+      "thresholds": [],
+      "timeRegions": [],
+      "title": "决策延迟 (P50/P95/P99)",
+      "tooltip": {"shared": true, "sort": 0, "value_type": "individual"},
+      "type": "graph",
+      "xaxis": {"mode": "time", "show": true, "values": []},
+      "yaxes": [{"format": "s", "label": "秒", "logBase": 1, "show": true}, {"format": "short", "logBase": 1, "show": true}],
+      "yaxis": {"align": false}
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 9, "w": 4, "x": 12, "y": 0},
+      "id": 2,
+      "options": {"displayMode": "gradient", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "text": {}},
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {"expr": "sum(rate(risk_decision_total{decision=\"PASS\"}[5m]))", "legendFormat": "放行", "refId": "A"},
+        {"expr": "sum(rate(risk_decision_total{decision=\"REVIEW\"}[5m]))", "legendFormat": "审核", "refId": "B"},
+        {"expr": "sum(rate(risk_decision_total{decision=\"BLOCK\"}[5m]))", "legendFormat": "阻断", "refId": "C"}
+      ],
+      "title": "决策分布",
+      "type": "bargauge"
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Prometheus",
+      "gridPos": {"h": 9, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "legend": {"show": true},
+      "lines": true,
+      "linewidth": 1,
+      "targets": [
+        {
+          "expr": "rate(risk_decision_total[1m])",
+          "legendFormat": "{{decision}}",
+          "refId": "A"
+        }
+      ],
+      "title": "决策速率 (决策/秒)",
+      "type": "graph"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 6, "x": 0, "y": 9},
+      "id": 4,
+      "options": {"orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showThresholdLabels": false, "showThresholdMarkers": true, "text": {}},
+      "targets": [
+        {"expr": "rate(risk_rule_execution_total[5m])", "legendFormat": "规则执行", "refId": "A"},
+        {"expr": "rate(risk_rule_fired_total[5m])", "legendFormat": "规则触发", "refId": "B"}
+      ],
+      "title": "规则引擎速率",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 9, "w": 6, "x": 6, "y": 9},
+      "id": 5,
+      "options": {"orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showThresholdLabels": false, "showThresholdMarkers": true, "text": {}},
+      "targets": [
+        {"expr": "rate(knowledge_search_empty_total[5m]) / rate(knowledge_search_total[5m])", "legendFormat": "空结果率", "refId": "A"}
+      ],
+      "title": "知识库检索空结果率",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 9},
+      "id": 6,
+      "options": {"orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showThresholdLabels": false, "showThresholdMarkers": true, "text": {}},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(risk_rule_execution_duration_bucket[5m]))",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(risk_rule_execution_duration_bucket[5m]))",
+          "legendFormat": "P99",
+          "refId": "B"
+        }
+      ],
+      "title": "规则执行延迟",
+      "type": "graph"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 7, "w": 8, "x": 0, "y": 18},
+      "id": 7,
+      "targets": [
+        {"expr": "risk_score_distribution", "legendFormat": "分位数", "refId": "A"}
+      ],
+      "title": "风险评分分布",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 7, "w": 16, "x": 8, "y": 18},
+      "id": 8,
+      "targets": [
+        {"expr": "rate(risk_decision_total[1m])", "refId": "A"}
+      ],
+      "title": "系统吞吐量 (TPS)",
+      "type": "stat"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["anti-fraud", "risk-management"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "Asia/Shanghai",
+  "title": "反欺诈系统监控大盘",
+  "uid": "anti-fraud-dashboard",
+  "version": 1
+}
