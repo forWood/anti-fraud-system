@@ -205,7 +205,7 @@ services:
     container_name: risk-agent
     ports:
       - "8080:8080"
-      - "9090:9090"
+      - "19090:9090"
     depends_on:
       mysql:
         condition: service_healthy
@@ -276,9 +276,9 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       MYSQL_HOST: mysql
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      MAIL_HOST: ${MAIL_HOST:smtp.example.com}
-      MAIL_USERNAME: ${MAIL_USERNAME:}
-      MAIL_PASSWORD: ${MAIL_PASSWORD:}
+      MAIL_HOST: smtp.example.com
+      MAIL_USERNAME: ""
+      MAIL_PASSWORD: ""
     restart: unless-stopped
 
   # ========================================================================
