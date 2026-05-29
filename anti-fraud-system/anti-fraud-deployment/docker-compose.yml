@@ -201,7 +201,7 @@ services:
   anti-fraud-agent:
     build:
       context: ../anti-fraud-agent
-      dockerfile: ../anti-fraud-deployment/docker/agent/Dockerfile
+      dockerfile: ../../anti-fraud-deployment/docker/agent/Dockerfile
     container_name: risk-agent
     ports:
       - "8080:8080"
@@ -226,7 +226,7 @@ services:
   knowledge-base:
     build:
       context: ../anti-fraud-knowledge-base
-      dockerfile: ../anti-fraud-deployment/docker/knowledge/Dockerfile
+      dockerfile: ../../anti-fraud-deployment/docker/knowledge/Dockerfile
     container_name: risk-knowledge
     ports:
       - "8088:8088"
@@ -265,7 +265,7 @@ services:
   alert-management:
     build:
       context: ../anti-fraud-microservices/alert-management
-      dockerfile: ../anti-fraud-deployment/docker/alert-management/Dockerfile
+      dockerfile: ../../anti-fraud-deployment/docker/alert-management/Dockerfile
     container_name: risk-alert
     ports:
       - "8082:8082"
@@ -287,7 +287,7 @@ services:
   case-management:
     build:
       context: ../anti-fraud-microservices/case-management
-      dockerfile: ../anti-fraud-deployment/docker/case-management/Dockerfile
+      dockerfile: ../../anti-fraud-deployment/docker/case-management/Dockerfile
     container_name: risk-case
     ports:
       - "8083:8083"
@@ -306,7 +306,7 @@ services:
   report-generation:
     build:
       context: ../anti-fraud-microservices/report-generation
-      dockerfile: ../anti-fraud-deployment/docker/report-generation/Dockerfile
+      dockerfile: ../../anti-fraud-deployment/docker/report-generation/Dockerfile
     container_name: risk-report
     ports:
       - "8084:8084"
@@ -338,7 +338,7 @@ services:
   api-gateway:
     build:
       context: ../anti-fraud-microservices/api-gateway
-      dockerfile: ../anti-fraud-deployment/docker/api-gateway/Dockerfile
+      dockerfile: ../../anti-fraud-deployment/docker/api-gateway/Dockerfile
     container_name: risk-gateway
     ports:
       - "8888:8888"
