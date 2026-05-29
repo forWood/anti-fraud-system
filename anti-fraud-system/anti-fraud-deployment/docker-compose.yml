@@ -201,7 +201,7 @@ services:
   anti-fraud-agent:
     build:
       context: ../anti-fraud-agent
-      dockerfile: ../../anti-fraud-deployment/docker/agent/Dockerfile
+      dockerfile: ../anti-fraud-deployment/docker/agent/Dockerfile
     container_name: risk-agent
     ports:
       - "8080:8080"
@@ -226,7 +226,7 @@ services:
   knowledge-base:
     build:
       context: ../anti-fraud-knowledge-base
-      dockerfile: ../../anti-fraud-deployment/docker/knowledge/Dockerfile
+      dockerfile: ../anti-fraud-deployment/docker/knowledge/Dockerfile
     container_name: risk-knowledge
     ports:
       - "8088:8088"
