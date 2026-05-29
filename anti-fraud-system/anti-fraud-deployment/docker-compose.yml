@@ -318,6 +318,21 @@ services:
     restart: unless-stopped
 
   # ========================================================================
+  # 注册中心 - Nacos (standalone)
+  # ========================================================================
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: risk-nacos
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+    restart: unless-stopped
+
+  # ========================================================================
   # API网关
   # ========================================================================
   api-gateway:
