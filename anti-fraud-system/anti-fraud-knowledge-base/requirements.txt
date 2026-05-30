@@ -1,5 +1,5 @@
 sentence-transformers>=2.2.0
-faiss-cpu>=1.7.4
+faiss-cpu==1.6.3
 numpy>=1.24.0
 grpcio>=1.58.0
 grpcio-tools>=1.58.0
