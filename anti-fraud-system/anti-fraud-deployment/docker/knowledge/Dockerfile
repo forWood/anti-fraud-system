@@ -21,10 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
 COPY src/ src/
-COPY config/ config/
 
-# 创建数据目录（自动新建空目录）
-RUN mkdir -p /app/data/faiss_index
+# 创建运行时目录（代码内置默认配置，无需外部文件）
+RUN mkdir -p /app/config /app/data/faiss_index
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
