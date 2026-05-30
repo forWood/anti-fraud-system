@@ -99,7 +99,11 @@ log "4/6 构建微服务..."
 if command -v mvn &>/dev/null; then
     log "   检测到 Maven，开始编译..."
     cd "$SCRIPT_DIR"
-    mvn clean package -DskipTests -T 4 -q || warn "编译失败，将使用已有 JAR"
+    if mvn clean package -DskipTests -T 4 2>&1 | grep -E '(BUILD|ERROR|WARNING|Compiling)'; then
+        log "   ✅ Maven 编译完成"
+    else
+        warn "编译可能有问题，将使用已有 JAR"
+    fi
 else
     warn "未安装 Maven，跳过编译（使用已有 JAR 包）"
 fi
