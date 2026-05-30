@@ -1,7 +1,7 @@
 # ============================================================================
 # API网关 Dockerfile
 # ============================================================================
-FROM openjdk:8-jre-slim
+FROM eclipse-temurin:8-jre
 
 LABEL maintainer="银行科技部"
 LABEL description="API网关"
