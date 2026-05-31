@@ -12,6 +12,9 @@ spring:
       discovery:
         enabled: true
         server-addr: ${NACOS_SERVER:localhost:8848}
+        fail-fast: false
+        heart-beat-interval: 5000
+        heart-beat-timeout: 15000
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}

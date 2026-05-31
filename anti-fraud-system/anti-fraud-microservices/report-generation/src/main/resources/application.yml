@@ -12,6 +12,9 @@ spring:
       discovery:
         enabled: true
         server-addr: ${NACOS_SERVER:localhost:8848}
+        fail-fast: false
+        heart-beat-interval: 5000
+        heart-beat-timeout: 15000
 
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/risk_db?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai

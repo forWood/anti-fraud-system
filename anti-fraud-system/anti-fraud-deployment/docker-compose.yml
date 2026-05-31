@@ -215,6 +215,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      nacos:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: dev
       MYSQL_HOST: mysql
@@ -258,6 +260,7 @@ services:
       - "8085:8081"
     depends_on:
       - anti-fraud-agent
+      - nacos
     environment:
       AGENT_SERVICE_URL: http://anti-fraud-agent:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -277,6 +280,7 @@ services:
     depends_on:
       - mysql
       - kafka
+      - nacos
     environment:
       SPRING_PROFILES_ACTIVE: dev
       MYSQL_HOST: mysql
@@ -300,6 +304,7 @@ services:
     depends_on:
       - mysql
       - kafka
+      - nacos
     environment:
       SPRING_PROFILES_ACTIVE: dev
       MYSQL_HOST: mysql
@@ -319,6 +324,7 @@ services:
       - "8084:8084"
     depends_on:
       - mysql
+      - nacos
     environment:
       SPRING_PROFILES_ACTIVE: dev
       MYSQL_HOST: mysql
@@ -338,6 +344,15 @@ services:
     environment:
       MODE: standalone
       NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:8848/nacos/v1/console/health/readiness | grep -q UP || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
     restart: unless-stopped
 
   # ========================================================================
@@ -357,6 +372,7 @@ services:
       - case-management
       - report-generation
       - redis
+      - nacos
     environment:
       SPRING_PROFILES_ACTIVE: dev
       REDIS_HOST: redis
