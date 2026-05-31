@@ -109,40 +109,68 @@ else
 fi
 
 # -------------------------------------------------------------------
-# 5. 启动所有容器
+# 5. 启动容器（分步：先基础设施，再微服务）
 # -------------------------------------------------------------------
-log "5/6 启动容器..."
+log "5/8 启动基础设施 (Nacos, MySQL, Redis, Kafka)..."
 cd "$DEPLOY_DIR"
 
 # 先停掉旧容器
 $COMPOSE_CMD down 2>/dev/null || true
 
-# 启动
-$COMPOSE_CMD up -d
+# 第一步：启动基础服务
+$COMPOSE_CMD up -d zookeeper kafka mysql redis clickhouse nacos etcd minio
 
-# 等基础服务就绪
+# 等 MySQL 就绪
 log "   等待 MySQL 就绪..."
 for i in $(seq 1 30); do
     if docker exec risk-mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
-        log "   MySQL 已就绪"
+        log "   ✅ MySQL 已就绪"
         break
     fi
     sleep 2
 done
 
+# 等 Nacos 就绪（需检查健康端点，不能只看 HTTP 可达）
 log "   等待 Nacos 就绪..."
 for i in $(seq 1 30); do
-    if curl -s http://localhost:8848/nacos/ &>/dev/null; then
-        log "   Nacos 已就绪"
+    STATUS=$(curl -s "http://localhost:8848/nacos/v1/console/health/readiness" 2>/dev/null || echo "")
+    if echo "$STATUS" | grep -q "UP"; then
+        log "   ✅ Nacos 已就绪（含 gRPC）"
         break
     fi
-    sleep 2
+    sleep 3
 done
 
+# 检查 Nacos 是否真正就绪
+if ! curl -s "http://localhost:8848/nacos/v1/console/health/readiness" 2>/dev/null | grep -q "UP"; then
+    warn "Nacos 未完全就绪，等待额外 30 秒..."
+    sleep 30
+fi
+
 # -------------------------------------------------------------------
-# 6. 验证结果
+# 6. 构建并启动业务微服务
 # -------------------------------------------------------------------
-log "6/6 验证部署结果..."
+log "6/8 构建业务微服务镜像..."
+$COMPOSE_CMD build anti-fraud-agent transaction-monitor alert-management case-management report-generation api-gateway knowledge-base 2>&1 | tail -5
+
+log "7/8 启动业务微服务（Nacos 已就绪，按依赖顺序启动）..."
+# 先启动 Agent（其他服务可能依赖它）
+$COMPOSE_CMD up -d anti-fraud-agent
+sleep 15
+
+# 启动其余微服务
+$COMPOSE_CMD up -d transaction-monitor alert-management case-management report-generation api-gateway
+
+# 启动可选服务
+$COMPOSE_CMD up -d milvus flink-jobmanager flink-taskmanager prometheus grafana knowledge-base
+
+log "   等待微服务注册到 Nacos (60秒)..."
+sleep 60
+
+# -------------------------------------------------------------------
+# 8. 验证结果
+# -------------------------------------------------------------------
+log "8/8 验证部署结果..."
 echo ""
 echo "========================================"
 echo "  容器状态"
