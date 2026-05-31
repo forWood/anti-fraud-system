@@ -220,6 +220,7 @@ services:
       MYSQL_HOST: mysql
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NACOS_SERVER: nacos:8848
     restart: unless-stopped
 
   # ========================================================================
@@ -260,6 +261,7 @@ services:
     environment:
       AGENT_SERVICE_URL: http://anti-fraud-agent:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NACOS_SERVER: nacos:8848
     restart: unless-stopped
 
   # ========================================================================
@@ -279,6 +281,7 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       MYSQL_HOST: mysql
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NACOS_SERVER: nacos:8848
       MAIL_HOST: smtp.example.com
       MAIL_USERNAME: ""
       MAIL_PASSWORD: ""
@@ -301,6 +304,7 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       MYSQL_HOST: mysql
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NACOS_SERVER: nacos:8848
     restart: unless-stopped
 
   # ========================================================================
@@ -318,6 +322,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: dev
       MYSQL_HOST: mysql
+      NACOS_SERVER: nacos:8848
     restart: unless-stopped
 
   # ========================================================================

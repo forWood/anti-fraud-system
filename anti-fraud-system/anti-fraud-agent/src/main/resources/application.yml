@@ -12,6 +12,12 @@ spring:
   profiles:
     active: dev
 
+  cloud:
+    nacos:
+      discovery:
+        enabled: true
+        server-addr: ${NACOS_SERVER:localhost:8848}
+
   # Redis配置 - 在线特征存储
   redis:
     host: ${REDIS_HOST:localhost}

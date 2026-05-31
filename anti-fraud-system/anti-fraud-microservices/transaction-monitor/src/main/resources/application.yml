@@ -7,6 +7,12 @@ spring:
   profiles:
     active: dev
 
+  cloud:
+    nacos:
+      discovery:
+        enabled: true
+        server-addr: ${NACOS_SERVER:localhost:8848}
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
