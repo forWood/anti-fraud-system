@@ -157,25 +157,23 @@ public class DroolsRuleEngine {
                 kieSession.setGlobal("matchedRules", matchedRules);
                 kieSession.setGlobal("logger", log);
 
-                // 插入事实对象
+                // 插入 features Map 到默认入口 (规则中通过 Map(this["xxx"]) 引用)
                 kieSession.insert(features);
 
-                // 插入设备信息
-                Map<String, Object> deviceInfo = new HashMap<>();
-                deviceInfo.put("deviceId", features.get("device_id"));
-                deviceInfo.put("isEmulator", features.getOrDefault("is_emulator", false));
-                deviceInfo.put("isRooted", features.getOrDefault("is_rooted", false));
-                deviceInfo.put("isFirstBinding", features.getOrDefault("is_first_device", false));
-                kieSession.insert(deviceInfo);
+                // 插入标量值到命名的 entry-point (DRL 规则中 from entry-point "xxx" 引用)
+                insertDouble(kieSession, "amount", features.get("amount"));
+                insertDouble(kieSession, "amount_1h", features.get("amount_1h"));
+                insertDouble(kieSession, "amount_24h", features.get("amount_24h"));
+                insertDouble(kieSession, "amount_deviation", features.get("amount_deviation"));
+                insertInteger(kieSession, "count_1h", features.get("count_1h"));
+                insertInteger(kieSession, "count_24h", features.get("count_24h"));
+                insertInteger(kieSession, "device_count_30d", features.get("device_count_30d"));
+                insertInteger(kieSession, "city_count_30d", features.get("city_count_30d"));
+                insertString(kieSession, "counterparty_country", features.get("counterparty_country"));
+                insertString(kieSession, "ip_risk_level", features.get("ip_risk_level"));
 
-                // 插入客户统计信息
-                Map<String, Object> customerStats = new HashMap<>();
-                customerStats.put("dailyTransferInCount", features.getOrDefault("count_24h", 0));
-                customerStats.put("dailyTransferOutAmount", features.getOrDefault("amount_24h", 0.0));
-                customerStats.put("todayTransactionCount", features.getOrDefault("count_24h", 0));
-                customerStats.put("deviceCount30d", features.getOrDefault("device_count_30d", 0));
-                customerStats.put("cityCount30d", features.getOrDefault("city_count_30d", 0));
-                kieSession.insert(customerStats);
+                // 高风险国家列表 (entry-point "high_risk_countries")
+                insertStaticHighRiskCountries(kieSession);
 
                 // 执行规则
                 int rulesFired = kieSession.fireAllRules();
@@ -254,6 +252,38 @@ public class DroolsRuleEngine {
             return 0;
         } finally {
             lock.readLock().unlock();
+        }
+    }
+
+    // ======================================================================
+    // 辅助方法: 向 Drools entry-point 插入标量值
+    // ======================================================================
+
+    private void insertDouble(KieSession session, String entryPoint, Object value) {
+        if (value != null) {
+            double d = (value instanceof Number) ? ((Number) value).doubleValue() : Double.parseDouble(value.toString());
+            session.getEntryPoint(entryPoint).insert(d);
+        }
+    }
+
+    private void insertInteger(KieSession session, String entryPoint, Object value) {
+        if (value != null) {
+            int i = (value instanceof Number) ? ((Number) value).intValue() : Integer.parseInt(value.toString());
+            session.getEntryPoint(entryPoint).insert(i);
+        }
+    }
+
+    private void insertString(KieSession session, String entryPoint, Object value) {
+        if (value != null) {
+            session.getEntryPoint(entryPoint).insert(value.toString());
+        }
+    }
+
+    /** 向 entry-point "high_risk_countries" 插入 FATF 高风险国家列表 */
+    private void insertStaticHighRiskCountries(KieSession session) {
+        String[] countries = {"KP", "IR", "SY", "MM", "YE", "LY", "SO", "CU", "VE"};
+        for (String c : countries) {
+            session.getEntryPoint("high_risk_countries").insert(c);
         }
     }
 }
