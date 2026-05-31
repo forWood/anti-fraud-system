@@ -38,10 +38,10 @@ scrape_configs:
         labels:
           service: 'alert-management'
 
-  # ===== Kafka监控 =====
-  - job_name: 'kafka-metrics'
-    static_configs:
-      - targets: ['kafka:9092']
+  # ===== Kafka监控（需通过JMX Exporter暴露，暂不启用）=====
+  # - job_name: 'kafka-metrics'
+  #   static_configs:
+  #     - targets: ['kafka:9092']
 
   # ===== Redis监控 =====
   - job_name: 'redis-exporter'
