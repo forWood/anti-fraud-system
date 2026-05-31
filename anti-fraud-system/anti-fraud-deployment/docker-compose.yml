@@ -39,8 +39,8 @@ services:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9092' 2>/dev/null"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 90s
 
   # ========================================================================
   # 数据库 - MySQL
