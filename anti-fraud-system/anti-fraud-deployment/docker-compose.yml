@@ -132,6 +132,7 @@ services:
     ports:
       - "19530:19530"
       - "9091:9091"
+    command: ["milvus", "run", "standalone"]
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
@@ -242,6 +243,7 @@ services:
       DB_DATABASE: risk_db
       MILVUS_HOST: milvus
       MILVUS_PORT: "19530"
+      HF_ENDPOINT: https://hf-mirror.com
     restart: unless-stopped
 
   # ========================================================================

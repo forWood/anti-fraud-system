@@ -20,6 +20,9 @@ COPY requirements.txt .
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
     && pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
 
+# HuggingFace 国内镜像（解决模型下载被墙）
+ENV HF_ENDPOINT=https://hf-mirror.com
+
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
 

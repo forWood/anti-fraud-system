@@ -12,7 +12,7 @@ WORKDIR /app
 
 COPY target/api-gateway-*.jar app.jar
 
-ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC"
+ENV JAVA_OPTS="-Xms128m -Xmx256m -XX:+UseSerialGC -XX:MaxRAMPercentage=75.0"
 ENV SPRING_PROFILES_ACTIVE=prod
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

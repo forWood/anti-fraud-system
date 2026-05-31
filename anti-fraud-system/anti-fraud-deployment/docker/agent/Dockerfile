@@ -18,7 +18,7 @@ COPY target/anti-fraud-agent-*.jar app.jar
 COPY src/main/resources/rules/ /app/rules/
 
 # JVM配置
-ENV JAVA_OPTS="-Xms2g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/"
+ENV JAVA_OPTS="-Xms128m -Xmx256m -XX:+UseSerialGC -XX:MaxRAMPercentage=75.0"
 ENV SPRING_PROFILES_ACTIVE=prod
 ENV DROOLS_RULES_PATH=/app/rules
 

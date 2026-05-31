@@ -12,7 +12,7 @@ WORKDIR /app
 
 COPY target/case-management-*.jar app.jar
 
-ENV JAVA_OPTS="-Xms512m -Xmx1g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+ENV JAVA_OPTS="-Xms128m -Xmx256m -XX:+UseSerialGC -XX:MaxRAMPercentage=75.0"
 ENV SPRING_PROFILES_ACTIVE=prod
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
