@@ -40,35 +40,35 @@ public class ApiGatewayApplication {
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
-            // 智能体服务
+            // 智能体服务 (网关 /api/agent/** → 服务 /api/v1/agent/**)
             .route("anti-fraud-agent", r -> r
                 .path("/api/agent/**")
                 .filters(f -> f
-                    .stripPrefix(1)
+                    .rewritePath("/api/agent/(?<remaining>.*)", "/api/v1/agent/${remaining}")
                     .addRequestHeader("X-Gateway", "api-gateway")
                     .addResponseHeader("X-Gateway-Time", LocalDateTime.now().toString())
                 )
                 .uri("lb://anti-fraud-agent"))
 
-            // 交易监控服务
+            // 交易监控服务 (网关 /api/tm/** → 服务 /api/v1/monitor/**)
             .route("transaction-monitor", r -> r
                 .path("/api/tm/**")
                 .filters(f -> f
-                    .stripPrefix(1)
+                    .rewritePath("/api/tm/(?<remaining>.*)", "/api/v1/monitor/${remaining}")
                     .addRequestHeader("X-Gateway", "api-gateway")
                 )
                 .uri("lb://transaction-monitor"))
 
-            // 预警管理服务
+            // 预警管理服务 (网关 /api/alerts/** → 服务 /api/v1/alerts/**)
             .route("alert-management", r -> r
                 .path("/api/alerts/**")
                 .filters(f -> f
-                    .stripPrefix(1)
+                    .rewritePath("/api/alerts/(?<remaining>.*)", "/api/v1/alerts/${remaining}")
                     .addRequestHeader("X-Gateway", "api-gateway")
                 )
                 .uri("lb://alert-management"))
 
-            // 案件管理服务
+            // 案件管理服务 (网关 /api/cases/** → 服务 /api/cases/**)
             .route("case-management", r -> r
                 .path("/api/cases/**")
                 .filters(f -> f
@@ -77,7 +77,7 @@ public class ApiGatewayApplication {
                 )
                 .uri("lb://case-management"))
 
-            // 报告生成服务
+            // 报告生成服务 (网关 /api/reports/** → 服务 /api/reports/**)
             .route("report-generation", r -> r
                 .path("/api/reports/**")
                 .filters(f -> f
